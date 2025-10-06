@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>オセロゲーム</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      text-align: center;
+      background: #f5f5f5;
+    }
+    h1 { margin: 10px; }
+    #board {
+      display: grid;
+      grid-template-columns: repeat(8, 50px);
+      grid-template-rows: repeat(8, 50px);
+      margin: 20px auto;
+      border: 2px solid #333;
+    }
+    .cell {
+      width: 50px;
+      height: 50px;
+      background: green;
+      border: 1px solid #000;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      cursor: pointer;
+    }
+    .disc {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+    }
+    .black { background: black; }
+    .white { background: white; }
+    #turn { margin: 10px; font-size: 18px; }
+  </style>
+</head>
+<body>
+  <h1>オセロゲーム</h1>
+  <div id="turn">黒の番です</div>
+  <div id="board"></div>
+  <script>
+    const boardElement = document.getElementById("board");
+    const turnElement = document.getElementById("turn");
+
+    // 盤面の初期化（8x8）
+    let board = Array.from({ length: 8 }, () => Array(8).fill(null));
+    board[3][3] = "white";
+    board[3][4] = "black";
+    board[4][3] = "black";
+    board[4][4] = "white";
+
+    let currentPlayer = "black";
+
+    // 描画関数
+    function renderBoard() {
+      boardElement.innerHTML = "";
+      for (let y = 0; y < 8; y++) {
+        for (let x = 0; x < 8; x++) {
+          const cell = document.createElement("div");
+          cell.classList.add("cell");
+          if (board[y][x]) {
+            const disc = document.createElement("div");
+            disc.classList.add("disc", board[y][x]);
+            cell.appendChild(disc);
+          }
+          cell.addEventListener("click", () => handleClick(x, y));
+          boardElement.appendChild(cell);
+        }
+      }
+      turnElement.textContent = currentPlayer === "black" ? "黒の番です" : "白の番です";
+    }
+
+    // 石を置けるかどうか判定する方向
+    const directions = [
+      [1, 0], [-1, 0], [0, 1], [0, -1],
+      [1, 1], [1, -1], [-1, 1], [-1, -1]
+    ];
+
+    function isValidMove(x, y, player) {
+      if (board[y][x] !== null) return false;
+      const opponent = player === "black" ? "white" : "black";
+
+      for (let [dx, dy] of directions) {
+        let nx = x + dx, ny = y + dy;
+        let foundOpponent = false;
+        while (nx >= 0 && nx < 8 && ny >= 0 && ny < 8) {
+          if (board[ny][nx] === opponent) {
+            foundOpponent = true;
+          } else if (board[ny][nx] === player) {
+            if (foundOpponent) return true;
+            else break;
+          } else break;
+          nx += dx; ny += dy;
+        }
+      }
+      return false;
+    }
+
+    function flipDiscs(x, y, player) {
+      const opponent = player === "black" ? "white" : "black";
+      for (let [dx, dy] of directions) {
+        let nx = x + dx, ny = y + dy;
+        const toFlip = [];
+        while (nx >= 0 && nx < 8 && ny >= 0 && ny < 8) {
+          if (board[ny][nx] === opponent) {
+            toFlip.push([nx, ny]);
+          } else if (board[ny][nx] === player) {
+            toFlip.forEach(([fx, fy]) => board[fy][fx] = player);
+            break;
+          } else break;
+          nx += dx; ny += dy;
+        }
+      }
+    }
+
+    function handleClick(x, y) {
+      if (!isValidMove(x, y, currentPlayer)) return;
+      board[y][x] = currentPlayer;
+      flipDiscs(x, y, currentPlayer);
+      currentPlayer = currentPlayer === "black" ? "white" : "black";
+      renderBoard();
+    }
+
+    renderBoard();
+  </script>
+</body>
+</html>
