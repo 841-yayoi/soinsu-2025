@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>VALORANT AIM Reflex Trainer</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;700&display=swap');
+
+    body {
+      margin: 0;
+      overflow: hidden;
+      background: linear-gradient(135deg, #0f1923 0%, #10151d 100%);
+      color: white;
+      font-family: 'Rajdhani', sans-serif;
+      text-align: center;
+      user-select: none;
+    }
+
+    #ui {
+      position: absolute;
+      top: 20px;
+      width: 100%;
+      font-size: 22px;
+      text-shadow: 0 0 8px rgba(255,255,255,0.2);
+    }
+
+    canvas {
+      display: block;
+      margin: 0 auto;
+      border: 3px solid #ff4655;
+      background: radial-gradient(circle at center, #0c0f14 0%, #07090c 100%);
+      cursor: crosshair;
+      box-shadow: 0 0 20px rgba(255,70,85,0.3);
+    }
+
+    #startBtn {
+      background-color: #ff4655;
+      color: white;
+      padding: 12px 30px;
+      border: none;
+      border-radius: 10px;
+      font-size: 20px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      cursor: pointer;
+      transition: 0.2s;
+      box-shadow: 0 0 15px rgba(255,70,85,0.4);
+    }
+
+    #startBtn:hover {
+      background-color: #ff6070;
+      transform: scale(1.05);
+    }
+
+    #stats {
+      margin-top: 15px;
+      color: #00ffcc;
+      font-size: 18px;
+    }
+
+    .flash {
+      animation: flash 0.2s ease;
+    }
+
+    @keyframes flash {
+      0% { background-color: #111; }
+      50% { background-color: #ff465522; }
+      100% { background-color: #111; }
+    }
+  </style>
+</head>
+<body>
+  <div id="ui">
+    <button id="startBtn">▶ START TRAINING</button>
+    <div id="stats">スコア: <span id="score">0</span> | 平均反応時間: <span id="avg">--</span> ms</div>
+  </div>
+  <canvas id="game" width="900" height="600"></canvas>
+
+  <script>
+    const canvas = document.getElementById("game");
+    const ctx = canvas.getContext("2d");
+    const scoreText = document.getElementById("score");
+    const avgText = document.getElementById("avg");
+    const startBtn = document.getElementById("startBtn");
+
+    let target = null;
+    let score = 0;
+    let totalTime = 0;
+    let clickTime = 0;
+    let waiting = false;
+    let running = false;
+
+    // ターゲット描画
+    function drawTarget(x, y, r = 30) {
+      const grad = ctx.createRadialGradient(x, y, 0, x, y, r);
+      grad.addColorStop(0, "#ffffff");
+      grad.addColorStop(0.4, "#ff4655");
+      grad.addColorStop(1, "rgba(255,70,85,0)");
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    function randomPos() {
+      return {
+        x: Math.random() * (canvas.width - 120) + 60,
+        y: Math.random() * (canvas.height - 120) + 60,
+      };
+    }
+
+    function nextTarget() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      const pos = randomPos();
+      target = { ...pos, r: 30 };
+      drawTarget(target.x, target.y);
+      clickTime = performance.now();
+      waiting = true;
+    }
+
+    canvas.addEventListener("click", e => {
+      if (!running || !waiting || !target) return;
+      const rect = canvas.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+
+      const dx = x - target.x;
+      const dy = y - target.y;
+
+      if (Math.sqrt(dx * dx + dy * dy) < target.r) {
+        document.body.classList.add("flash");
+        setTimeout(() => document.body.classList.remove("flash"), 150);
+
+        const reaction = performance.now() - clickTime;
+        totalTime += reaction;
+        score++;
+        scoreText.textContent = score;
+        avgText.textContent = Math.round(totalTime / score);
+        waiting = false;
+
+        // 次のターゲットまでランダム遅延
+        setTimeout(nextTarget, Math.random() * 800 + 400);
+      }
+    });
+
+    startBtn.addEventListener("click", () => {
+      running = true;
+      score = 0;
+      totalTime = 0;
+      scoreText.textContent = 0;
+      avgText.textContent = "--";
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      nextTarget();
+    });
+  </script>
+</body>
+</html>
