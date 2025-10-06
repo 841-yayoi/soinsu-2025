@@ -1,0 +1,251 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>ガチ素因数分解</title>
+  <style>
+    :root{--bg:#0f1724;--card:#0b1220;--accent:#60a5fa;--muted:#94a3b8}
+    *{box-sizing:border-box;font-family:Inter,ui-sans-serif,system-ui,Segoe UI,Roboto,'Hiragino Kaku Gothic ProN',Meiryo,'Helvetica Neue',Arial}
+    body{margin:0;min-height:100vh;background:linear-gradient(180deg,#071024 0%, #071a2a 100%);color:#e6eef8;display:flex;align-items:center;justify-content:center;padding:24px}
+    .app{width:900px;max-width:100%;background:linear-gradient(180deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01));border-radius:12px;padding:20px;box-shadow:0 8px 30px rgba(2,6,23,0.6)}
+    header{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+    h1{font-size:20px;margin:0}
+    .controls{display:flex;gap:12px;align-items:center}
+    select,input[type=number]{background:transparent;border:1px solid rgba(255,255,255,0.06);padding:6px 8px;border-radius:8px;color:inherit}
+    button{background:var(--accent);border:none;padding:8px 12px;border-radius:10px;color:#04233a;cursor:pointer;font-weight:600}
+    .main{display:grid;grid-template-columns:1fr 320px;gap:16px}
+    .play{background:var(--card);padding:18px;border-radius:10px;min-height:220px;display:flex;flex-direction:column;align-items:center;justify-content:center}
+    .number{font-size:32px;font-weight:700;padding:12px 18px;border-radius:10px;background:linear-gradient(90deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01));}
+    .hint{color:var(--muted);margin-top:8px}
+    .inputRow{margin-top:14px;display:flex;gap:8px;width:100%;justify-content:center}
+    .inputRow input{width:320px;padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,0.06);background:transparent;color:inherit}
+    .sidebar{display:flex;flex-direction:column;gap:12px}
+    .card{background:var(--card);padding:12px;border-radius:10px}
+    .stat{display:flex;justify-content:space-between;align-items:center}
+    .history{max-height:220px;overflow:auto;margin-top:8px}
+    .small{font-size:13px;color:var(--muted)}
+    footer{margin-top:12px;font-size:13px;color:var(--muted);text-align:center}
+    .ok{color:#9ae6b4}
+    .bad{color:#fca5a5}
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <h1>ガチ素因数分解</h1>
+      <div class="controls">
+        <label class="small">制限時間（秒）<input id="timeLimit" type="number" value="60" min="10" max="600"></label>
+        <label class="small">難易度
+          <select id="difficulty">
+            <option value="easy">Easy (小さい数)</option>
+            <option value="normal" selected>Normal</option>
+            <option value="hard">Hard (大きめ)</option>
+          </select>
+        </label>
+        <button id="startBtn">スタート</button>
+      </div>
+    </header>
+
+    <div class="main">
+      <section class="play">
+        <div style="display:flex;gap:18px;align-items:center;">
+          <div>
+            <div class="small">残り時間</div>
+            <div id="timer" style="font-size:28px;font-weight:700">00:00</div>
+          </div>
+          <div>
+            <div class="small">スコア</div>
+            <div id="score" style="font-size:28px;font-weight:700">0</div>
+          </div>
+        </div>
+
+        <div style="margin-top:18px;text-align:center;">
+          <div class="small">この数を素因数分解してください</div>
+          <div id="number" class="number">--</div>
+          <div class="hint">答えは小さい素因数の積で表してください（例: 2*2*3）</div>
+
+          <div class="inputRow">
+            <input id="answerInput" placeholder="例: 2*2*3 または 2 2 3" autocomplete="off">
+            <button id="submitBtn">判定</button>
+          </div>
+          <div id="feedback" class="small" style="margin-top:8px"></div>
+        </div>
+
+        <div style="margin-top:14px;width:100%;display:flex;gap:8px;justify-content:center">
+          <button id="skipBtn">スキップ (-5点)</button>
+          <button id="hintBtn">ヒントを表示 (-2点)</button>
+        </div>
+      </section>
+
+      <aside class="sidebar">
+        <div class="card">
+          <div class="stat"><div class="small">ラウンド</div><div id="round">0</div></div>
+          <div class="stat" style="margin-top:8px"><div class="small">正解数</div><div id="correctCount">0</div></div>
+          <div class="stat" style="margin-top:8px"><div class="small">失敗</div><div id="wrongCount">0</div></div>
+        </div>
+
+        <div class="card">
+          <div class="small">履歴（最新10件）</div>
+          <div class="history" id="history"></div>
+        </div>
+
+        <div class="card small">
+          ルール：制限時間内に出される数をどんどん素因数分解してスコアを稼ぐゲームです。<br>
+          正解：完全な素因数分解を入力したときに得点。<br>
+          間違い：-1点、スキップは-5点。正解はスコアにボーナス。ヒント使用で-2点。難易度で出る数の大きさが変わります。
+        </div>
+      </aside>
+    </div>
+
+    <footer>Enterで送信できます。楽しくガチで分解しよう！</footer>
+  </div>
+
+<script>
+// ユーティリティ
+function formatTime(s){ const m = Math.floor(s/60); const ss = s%60; return String(m).padStart(2,'0')+":"+String(ss).padStart(2,'0'); }
+function randInt(a,b){ return Math.floor(Math.random()*(b-a+1))+a }
+
+// 素数リスト（試し割り用に小さな素数を用意）
+const SMALL_PRIMES = (()=>{
+  const p=[]; const max=100000; const sieve=new Uint8Array(max+1);
+  for(let i=2;i<=max;i++) if(!sieve[i]){p.push(i); for(let j=i*i;j<=max;j+=i) sieve[j]=1}
+  return p;
+})();
+
+// 素因数分解（試し割り）。大きい数には時間かかるが本ゲームでは制限値で使う。
+function primeFactorize(n){ const res=[]; if(n<=1) return res;
+  let remaining = n;
+  for(const p of SMALL_PRIMES){ if(p*p>remaining) break; while(remaining%p===0){ res.push(p); remaining/=p; } }
+  if(remaining>1) res.push(remaining);
+  return res;
+}
+
+// 数生成（難易度に応じて）
+function generateNumber(difficulty){
+  // 各難易度で掛ける素数の個数と素数の範囲を決める
+  if(difficulty==='easy'){
+    // 2~3桁の合成数を作る
+    const count = randInt(2,4);
+    let n=1;
+    for(let i=0;i<count;i++){ n *= SMALL_PRIMES[randInt(0,50)]; }
+    return n;
+  } else if(difficulty==='normal'){
+    const count = randInt(3,5);
+    let n=1;
+    for(let i=0;i<count;i++){ n *= SMALL_PRIMES[randInt(0,300)]; }
+    return n;
+  } else {
+    // hard: 時には大きな素因数も混ぜる
+    const count = randInt(4,6);
+    let n=1;
+    for(let i=0;i<count;i++){
+      const choice = Math.random();
+      if(choice<0.7) n *= SMALL_PRIMES[randInt(0,800)];
+      else n *= SMALL_PRIMES[randInt(800,2000)];
+    }
+    return n;
+  }
+}
+
+// UI要素
+const startBtn = document.getElementById('startBtn');
+const timerEl = document.getElementById('timer');
+const numberEl = document.getElementById('number');
+const answerInput = document.getElementById('answerInput');
+const submitBtn = document.getElementById('submitBtn');
+const scoreEl = document.getElementById('score');
+const feedback = document.getElementById('feedback');
+const timeLimitInput = document.getElementById('timeLimit');
+const difficultySelect = document.getElementById('difficulty');
+const roundEl = document.getElementById('round');
+const correctCountEl = document.getElementById('correctCount');
+const wrongCountEl = document.getElementById('wrongCount');
+const historyEl = document.getElementById('history');
+const skipBtn = document.getElementById('skipBtn');
+const hintBtn = document.getElementById('hintBtn');
+
+let timeLeft = 0; let timerId=null; let currentNumber = null; let score=0; let round=0; let correct=0; let wrong=0; let history=[];
+
+function startGame(){
+  timeLeft = Math.max(10, parseInt(timeLimitInput.value)||60);
+  score = 0; round=0; correct=0; wrong=0; history=[];
+  updateUI();
+  nextRound();
+  if(timerId) clearInterval(timerId);
+  timerId = setInterval(()=>{
+    timeLeft--;
+    timerEl.textContent = formatTime(timeLeft);
+    if(timeLeft<=0){ endGame(); }
+  },1000);
+}
+
+function endGame(){ clearInterval(timerId); timerId=null; numberEl.textContent='--'; feedback.textContent=`終了！最終スコア: ${score} 点（正解 ${correct} 、間違い ${wrong}）`;
+  feedback.className='small';
+}
+
+function updateUI(){ timerEl.textContent = formatTime(timeLeft); scoreEl.textContent = score; roundEl.textContent = round; correctCountEl.textContent = correct; wrongCountEl.textContent = wrong; }
+
+function normalizeFactorsInput(text){ // 2*2*3 や 2 2 3 を正規化して配列に
+  const cleaned = text.replace(/\*/g,' ').trim(); if(!cleaned) return [];
+  return cleaned.split(/\s+/).map(x=>{ const n=Number(x); return Number.isFinite(n)?n:NaN; });
+}
+
+function arraysEqual(a,b){ if(a.length!==b.length) return false; for(let i=0;i<a.length;i++) if(a[i]!==b[i]) return false; return true; }
+
+function submitAnswer(){ if(currentNumber===null) return; const raw = answerInput.value.trim(); if(!raw){ feedback.textContent='入力してください。'; feedback.className='small bad'; return; }
+  const userFactors = normalizeFactorsInput(raw).filter(x=>!Number.isNaN(x) && x>1).map(x=>Math.floor(x)); if(userFactors.length===0){ feedback.textContent='素因数を正しい形式で入れてください。'; feedback.className='small bad'; return; }
+  userFactors.sort((a,b)=>a-b);
+  const correctFactors = primeFactorize(currentNumber).slice().sort((a,b)=>a-b);
+  if(arraysEqual(userFactors, correctFactors)){
+    // 正解
+    round++; correct++;
+    const basePoints = Math.floor(Math.log(currentNumber+1)*10) + correctFactors.length*5;
+    // 早押しボーナス: 入力までの時間で軽く変化させる（今回は省略、次に改良可）
+    score += basePoints;
+    feedback.textContent = `正解！ +${basePoints} 点 — ${correctFactors.join(' × ')}`;
+    feedback.className='small ok';
+    addHistory(currentNumber, true, correctFactors.join('×'), basePoints);
+    answerInput.value='';
+    nextRound();
+  } else {
+    // 不正解
+    wrong++; round++;
+    score -= 1; if(score<0) score=0;
+    feedback.textContent = `不正解… -1 点`;
+    feedback.className='small bad';
+    addHistory(currentNumber, false, userFactors.join('×')||raw, -1);
+    updateUI();
+  }
+}
+
+function addHistory(num, ok, resp, pts){ history.unshift({num,ok,resp,pts}); if(history.length>10) history.pop(); renderHistory(); }
+function renderHistory(){ historyEl.innerHTML = history.map(h=>{
+  return `<div style="padding:6px;border-bottom:1px dashed rgba(255,255,255,0.03)" class="small">${h.num} → ${h.resp} <strong style='margin-left:6px'>${h.pts>0?'+'+h.pts:h.pts}pt</strong> ${h.ok?'<span class="ok">✔</span>':'<span class="bad">✖</span>'}</div>`
+}).join(''); }
+
+function nextRound(){ if(timeLeft<=0) return; currentNumber = generateNumber(difficultySelect.value);
+  // たまに素数が出ることもあるが、その場合は素数だと表示する — ゲーム性としてOK
+  numberEl.textContent = currentNumber.toLocaleString(); updateUI();
+}
+
+// ヒント: 最初の素因数を一つ表示
+function showHint(){ if(currentNumber===null) return; const factors = primeFactorize(currentNumber); if(factors.length===0) { feedback.textContent='この数は1かもしれません。'; return; }
+  const first = factors[0]; score -= 2; if(score<0) score=0; feedback.textContent = `ヒント：最小の素因数は ${first} です（-2点）`; feedback.className='small'; addHistory(currentNumber,false,'hint',-2); updateUI(); }
+
+// スキップ
+function skip(){ if(currentNumber===null) return; score -=5; if(score<0) score=0; addHistory(currentNumber,false,'skip',-5); feedback.textContent='スキップしました（-5点）'; feedback.className='small'; nextRound(); updateUI(); }
+
+// イベント
+startBtn.addEventListener('click', ()=>{ startGame(); answerInput.focus(); });
+submitBtn.addEventListener('click', submitAnswer);
+answerInput.addEventListener('keydown', (e)=>{ if(e.key==='Enter') submitAnswer(); });
+skipBtn.addEventListener('click', skip);
+hintBtn.addEventListener('click', showHint);
+
+// 初期UI
+updateUI();
+
+</script>
+</body>
+</html>
