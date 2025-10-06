@@ -102,18 +102,15 @@
   </div>
 
 <script>
-// ユーティリティ
 function formatTime(s){ const m = Math.floor(s/60); const ss = s%60; return String(m).padStart(2,'0')+":"+String(ss).padStart(2,'0'); }
 function randInt(a,b){ return Math.floor(Math.random()*(b-a+1))+a }
 
-// 素数リスト（試し割り用に小さな素数を用意）
 const SMALL_PRIMES = (()=>{
   const p=[]; const max=100000; const sieve=new Uint8Array(max+1);
   for(let i=2;i<=max;i++) if(!sieve[i]){p.push(i); for(let j=i*i;j<=max;j+=i) sieve[j]=1}
   return p;
 })();
 
-// 素因数分解（試し割り）。大きい数には時間かかるが本ゲームでは制限値で使う。
 function primeFactorize(n){ const res=[]; if(n<=1) return res;
   let remaining = n;
   for(const p of SMALL_PRIMES){ if(p*p>remaining) break; while(remaining%p===0){ res.push(p); remaining/=p; } }
@@ -121,34 +118,28 @@ function primeFactorize(n){ const res=[]; if(n<=1) return res;
   return res;
 }
 
-// 数生成（難易度に応じて）
+let difficultyGrowth = 1; // 出題ごとに数を大きくしていく倍率
+
 function generateNumber(difficulty){
-  // 各難易度で掛ける素数の個数と素数の範囲を決める
+  // 難易度に応じた基準範囲
+  let baseMin = 10; // 初回は2桁から
+  let baseMax = 99;
+  const growthFactor = Math.min(10, 1 + round/5); // ラウンドごとに少しずつ範囲を広げる
+
   if(difficulty==='easy'){
-    // 2~3桁の合成数を作る
-    const count = randInt(2,4);
-    let n=1;
-    for(let i=0;i<count;i++){ n *= SMALL_PRIMES[randInt(0,50)]; }
-    return n;
+    baseMin *= growthFactor; baseMax *= growthFactor * 1.2;
   } else if(difficulty==='normal'){
-    const count = randInt(3,5);
-    let n=1;
-    for(let i=0;i<count;i++){ n *= SMALL_PRIMES[randInt(0,300)]; }
-    return n;
+    baseMin *= growthFactor * 1.5; baseMax *= growthFactor * 2;
   } else {
-    // hard: 時には大きな素因数も混ぜる
-    const count = randInt(4,6);
-    let n=1;
-    for(let i=0;i<count;i++){
-      const choice = Math.random();
-      if(choice<0.7) n *= SMALL_PRIMES[randInt(0,800)];
-      else n *= SMALL_PRIMES[randInt(800,2000)];
-    }
-    return n;
+    baseMin *= growthFactor * 2; baseMax *= growthFactor * 3;
   }
+
+  const target = randInt(Math.floor(baseMin), Math.floor(baseMax));
+  // targetが素数だったら、少し調整して合成数に
+  if(primeFactorize(target).length===1) return target * SMALL_PRIMES[randInt(0,10)];
+  return target;
 }
 
-// UI要素
 const startBtn = document.getElementById('startBtn');
 const timerEl = document.getElementById('timer');
 const numberEl = document.getElementById('number');
@@ -169,7 +160,7 @@ let timeLeft = 0; let timerId=null; let currentNumber = null; let score=0; let r
 
 function startGame(){
   timeLeft = Math.max(10, parseInt(timeLimitInput.value)||60);
-  score = 0; round=0; correct=0; wrong=0; history=[];
+  score = 0; round=0; correct=0; wrong=0; history=[]; difficultyGrowth=1;
   updateUI();
   nextRound();
   if(timerId) clearInterval(timerId);
@@ -186,11 +177,8 @@ function endGame(){ clearInterval(timerId); timerId=null; numberEl.textContent='
 
 function updateUI(){ timerEl.textContent = formatTime(timeLeft); scoreEl.textContent = score; roundEl.textContent = round; correctCountEl.textContent = correct; wrongCountEl.textContent = wrong; }
 
-function normalizeFactorsInput(text){ // 2*2*3 や 2 2 3 を正規化して配列に
-  const cleaned = text.replace(/\*/g,' ').trim(); if(!cleaned) return [];
-  return cleaned.split(/\s+/).map(x=>{ const n=Number(x); return Number.isFinite(n)?n:NaN; });
-}
-
+function normalizeFactorsInput(text){ const cleaned = text.replace(/\*/g,' ').trim(); if(!cleaned) return [];
+  return cleaned.split(/\s+/).map(x=>{ const n=Number(x); return Number.isFinite(n)?n:NaN; }); }
 function arraysEqual(a,b){ if(a.length!==b.length) return false; for(let i=0;i<a.length;i++) if(a[i]!==b[i]) return false; return true; }
 
 function submitAnswer(){ if(currentNumber===null) return; const raw = answerInput.value.trim(); if(!raw){ feedback.textContent='入力してください。'; feedback.className='small bad'; return; }
@@ -198,10 +186,8 @@ function submitAnswer(){ if(currentNumber===null) return; const raw = answerInpu
   userFactors.sort((a,b)=>a-b);
   const correctFactors = primeFactorize(currentNumber).slice().sort((a,b)=>a-b);
   if(arraysEqual(userFactors, correctFactors)){
-    // 正解
     round++; correct++;
     const basePoints = Math.floor(Math.log(currentNumber+1)*10) + correctFactors.length*5;
-    // 早押しボーナス: 入力までの時間で軽く変化させる（今回は省略、次に改良可）
     score += basePoints;
     feedback.textContent = `正解！ +${basePoints} 点 — ${correctFactors.join(' × ')}`;
     feedback.className='small ok';
@@ -209,7 +195,6 @@ function submitAnswer(){ if(currentNumber===null) return; const raw = answerInpu
     answerInput.value='';
     nextRound();
   } else {
-    // 不正解
     wrong++; round++;
     score -= 1; if(score<0) score=0;
     feedback.textContent = `不正解… -1 点`;
@@ -220,32 +205,22 @@ function submitAnswer(){ if(currentNumber===null) return; const raw = answerInpu
 }
 
 function addHistory(num, ok, resp, pts){ history.unshift({num,ok,resp,pts}); if(history.length>10) history.pop(); renderHistory(); }
-function renderHistory(){ historyEl.innerHTML = history.map(h=>{
-  return `<div style="padding:6px;border-bottom:1px dashed rgba(255,255,255,0.03)" class="small">${h.num} → ${h.resp} <strong style='margin-left:6px'>${h.pts>0?'+'+h.pts:h.pts}pt</strong> ${h.ok?'<span class="ok">✔</span>':'<span class="bad">✖</span>'}</div>`
-}).join(''); }
+function renderHistory(){ historyEl.innerHTML = history.map(h=>`<div style="padding:6px;border-bottom:1px dashed rgba(255,255,255,0.03)" class="small">${h.num} → ${h.resp} <strong style='margin-left:6px'>${h.pts>0?'+'+h.pts:h.pts}pt</strong> ${h.ok?'<span class="ok">✔</span>':'<span class="bad">✖</span>'}</div>`).join(''); }
 
-function nextRound(){ if(timeLeft<=0) return; currentNumber = generateNumber(difficultySelect.value);
-  // たまに素数が出ることもあるが、その場合は素数だと表示する — ゲーム性としてOK
-  numberEl.textContent = currentNumber.toLocaleString(); updateUI();
-}
+function nextRound(){ if(timeLeft<=0) return; currentNumber = generateNumber(difficultySelect.value); numberEl.textContent = currentNumber.toLocaleString(); updateUI(); }
 
-// ヒント: 最初の素因数を一つ表示
 function showHint(){ if(currentNumber===null) return; const factors = primeFactorize(currentNumber); if(factors.length===0) { feedback.textContent='この数は1かもしれません。'; return; }
   const first = factors[0]; score -= 2; if(score<0) score=0; feedback.textContent = `ヒント：最小の素因数は ${first} です（-2点）`; feedback.className='small'; addHistory(currentNumber,false,'hint',-2); updateUI(); }
 
-// スキップ
 function skip(){ if(currentNumber===null) return; score -=5; if(score<0) score=0; addHistory(currentNumber,false,'skip',-5); feedback.textContent='スキップしました（-5点）'; feedback.className='small'; nextRound(); updateUI(); }
 
-// イベント
 startBtn.addEventListener('click', ()=>{ startGame(); answerInput.focus(); });
 submitBtn.addEventListener('click', submitAnswer);
 answerInput.addEventListener('keydown', (e)=>{ if(e.key==='Enter') submitAnswer(); });
 skipBtn.addEventListener('click', skip);
 hintBtn.addEventListener('click', showHint);
 
-// 初期UI
 updateUI();
-
 </script>
 </body>
 </html>
